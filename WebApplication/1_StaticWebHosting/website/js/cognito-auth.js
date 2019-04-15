@@ -52,14 +52,25 @@ var WildRydes = window.WildRydes || {};
      * Cognito User Pool functions
      */
 
-    function register(email, password, onSuccess, onFailure) {
+    function register(email, password, phone_number, onSuccess, onFailure) {
+        var attributeList = [];
         var dataEmail = {
             Name: 'email',
             Value: email
         };
-        var attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute(dataEmail);
 
-        userPool.signUp(email, password, [attributeEmail], null,
+        var dataPhoneNumber = {
+            Name: 'phone_number',
+            Value: phone_number
+        };
+
+        var attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute(dataEmail);
+        var attributePhoneNumber = new AmazonCognitoIdentity.CognitoUserAttribute(dataPhoneNumber);
+
+        attributeList.push(attributeEmail);
+        attributeList.push(attributePhoneNumber);
+
+        userPool.signUp(toUsername(email), password, attributeList, null,
             function signUpCallback(err, result) {
                 if (!err) {
                     onSuccess(result);
@@ -71,17 +82,22 @@ var WildRydes = window.WildRydes || {};
     }
 
     function signin(email, password, onSuccess, onFailure) {
+
         var authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
-            Username: email,
+            Username: toUsername(email),
             Password: password
         });
 
         var cognitoUser = createCognitoUser(email);
         cognitoUser.authenticateUser(authenticationDetails, {
-            onSuccess: onSuccess,
-            onFailure: onFailure
+             onSuccess: onSuccess,
+             onFailure: onFailure,
+             mfaRequired: function(codeDeliveryDetails) {
+                 var verificationCode = prompt('Please input verification code' ,'');
+                 cognitoUser.sendMFACode(verificationCode, this);
+             }
         });
-    }
+   }
 
     function verify(email, code, onSuccess, onFailure) {
         createCognitoUser(email).confirmRegistration(code, true, function confirmCallback(err, result) {
@@ -95,9 +111,13 @@ var WildRydes = window.WildRydes || {};
 
     function createCognitoUser(email) {
         return new AmazonCognitoIdentity.CognitoUser({
-            Username: email,
+            Username: toUsername(email),
             Pool: userPool
         });
+    }
+
+    function toUsername(email) {
+        return email.replace('@', '-at-');
     }
 
     /*
@@ -127,6 +147,7 @@ var WildRydes = window.WildRydes || {};
 
     function handleRegister(event) {
         var email = $('#emailInputRegister').val();
+        var phone_number = $('#phoneInputRegister').val();
         var password = $('#passwordInputRegister').val();
         var password2 = $('#password2InputRegister').val();
 
@@ -144,7 +165,7 @@ var WildRydes = window.WildRydes || {};
         event.preventDefault();
 
         if (password === password2) {
-            register(email, password, onSuccess, onFailure);
+            register(email, password, phone_number, onSuccess, onFailure);
         } else {
             alert('Passwords do not match');
         }
